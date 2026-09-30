@@ -20,8 +20,10 @@ pipeline {
                 sh '''
                     python3 -m venv jenkins-venv
                     . jenkins-venv/bin/activate
+
                     pip install --upgrade pip
                     pip install -r app/requirements.txt
+
                     PYTHONPATH=. pytest
                 '''
             }
@@ -30,7 +32,8 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker build \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
                 '''
             }
         }
@@ -39,8 +42,12 @@ pipeline {
             steps {
                 sh '''
                     trivy image \
-                    --severity HIGH,CRITICAL \
-                    ${IMAGE_NAME}:${IMAGE_TAG}
+                        --severity HIGH,CRITICAL \
+                        --format table \
+                        -o trivy-report.txt \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
+
+                    cat trivy-report.txt
                 '''
             }
         }
@@ -61,7 +68,11 @@ pipeline {
             steps {
                 sh '''
                     sleep 10
+
                     curl -f http://localhost:5000/health
+
+                    echo ""
+                    echo "Application health check passed!"
                 '''
             }
         }
@@ -76,6 +87,12 @@ pipeline {
     }
 
     post {
+
+        always {
+            archiveArtifacts artifacts: 'trivy-report.txt',
+                allowEmptyArchive: true
+        }
+
         success {
             echo 'CI/CD Pipeline completed successfully!'
         }
